@@ -1,0 +1,17 @@
+# Foldery kompilacji
+build/
+bin/
+obj/
+
+# Pliki binarne i biblioteki
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+framelab_hub
+
+# Konfiguracje IDE
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,136 @@
+name: Build FrameLab Hub (Cross-Platform)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Pozwala na ręczne uruchomienie akcji w GitHubie
+
+jobs:
+  # 1. Kompilacja dla Windows (x64, x86, ARM64)
+  build-windows:
+    name: Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [Win32, x64, ARM64]
+    steps:
+      - name: Klonowanie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja CMake
+        run: cmake -A ${{ matrix.arch }} -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Kompilacja
+        run: cmake --build build --config Release
+
+      - name: Przesyłanie pliku wykonywalnego
+        uses: actions/upload-artifact@v4
+        with:
+          name: framelab_hub-windows-${{ matrix.arch }}
+          path: build/Release/framelab_hub.exe
+
+  # 2. Kompilacja dla macOS (Intel x86_64, Apple Silicon arm64)
+  build-macos:
+    name: macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Klonowanie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja CMake
+        run: cmake -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Kompilacja
+        run: cmake --build build --config Release
+
+      - name: Przesyłanie pliku wykonywalnego
+        uses: actions/upload-artifact@v4
+        with:
+          name: framelab_hub-macos-${{ matrix.arch }}
+          path: build/framelab_hub
+
+  # 3. Kompilacja dla Linux Intel/AMD (x64 64bit, x86 32bit)
+  build-linux-x86:
+    name: Linux (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - name: Klonowanie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Instalacja bibliotek X11 i OpenGL (64-bit)
+        if: matrix.arch == 'x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Instalacja bibliotek X11 i OpenGL (32-bit)
+        if: matrix.arch == 'x86'
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y g++-multilib libx11-dev:i386 libxrandr-dev:i386 libxinerama-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libgl1-mesa-dev:i386
+
+      - name: Konfiguracja CMake (64-bit)
+        if: matrix.arch == 'x64'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Konfiguracja CMake (32-bit)
+        if: matrix.arch == 'x86'
+        run: cmake -DCMAKE_CXX_FLAGS="-m32" -DCMAKE_C_FLAGS="-m32" -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Kompilacja
+        run: cmake --build build --config Release
+
+      - name: Przesyłanie pliku wykonywalnego
+        uses: actions/upload-artifact@v4
+        with:
+          name: framelab_hub-linux-${{ matrix.arch }}
+          path: build/framelab_hub
+
+  # 4. Kompilacja dla Linux ARM (aarch64 64bit, armv7 32bit) przy użyciu emulatora QEMU
+  build-linux-arm:
+    name: Linux ARM (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, armv7]
+    steps:
+      - name: Klonowanie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Kompilacja natywna w kontenerze ARM (QEMU)
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ubuntu22.04
+          githubToken: ${{ github.token }}
+          setup: |
+            mkdir -p "${PWD}/build"
+          dockerRunArgs: |
+            --volume "${PWD}:/workspace"
+          shell: /bin/bash
+          install: |
+            apt-get update
+            apt-get install -y build-essential cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+          run: |
+            cd /workspace
+            cmake -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --config Release
+
+      - name: Przesyłanie pliku wykonywalnego
+        uses: actions/upload-artifact@v4
+        with:
+          name: framelab_hub-linux-${{ matrix.arch }}
+          path: build/framelab_hub
