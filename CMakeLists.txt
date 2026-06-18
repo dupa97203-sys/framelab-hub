@@ -41,16 +41,11 @@ target_link_libraries(framelab_hub PRIVATE glfw)
 
 if(UNIX AND NOT APPLE)
     # Dla Linuksa - standardowe X11 i OpenGL
-    target_link_libraries(framelab_hub PRIVATE GL dl x11 randr xinerama xcursor xi pthread)
+    target_link_libraries(framelab_hub PRIVATE GL dl X11 Xrandr Xinerama Xcursor Xi pthread)
 elseif(APPLE)
     # Dla macOS - Frameworki systemowe Cocoa i OpenGL
     target_link_libraries(framelab_hub PRIVATE "-framework OpenGL" "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
 elseif(WIN32)
     # Dla Windows - OpenGL32 i DWM
     target_link_libraries(framelab_hub PRIVATE opengl32 dwmapi)
-    
-    # Konfiguracja Windows Subsystem w celu ukrycia konsoli (opcjonalne, ale profesjonalne w Release)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set_target_properties(framelab_hub PROPERTIES WIN32_EXECUTABLE TRUE)
-    endif()
 endif()

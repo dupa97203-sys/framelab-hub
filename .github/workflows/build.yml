@@ -134,3 +134,51 @@ jobs:
         with:
           name: framelab_hub-linux-${{ matrix.arch }}
           path: build/framelab_hub
+
+  # 5. Tworzenie GitHub Release i wgrywanie wszystkich artefaktów
+  release:
+    name: Utworzenie GitHub Release
+    needs: [build-windows, build-macos, build-linux-x86, build-linux-arm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Pobieranie wszystkich skompilowanych artefaktów
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Przygotowanie plików do wydania
+        run: |
+          mkdir release-files
+          
+          # Windows
+          cp artifacts/framelab_hub-windows-Win32/framelab_hub.exe release-files/framelab_hub-windows-x86.exe || true
+          cp artifacts/framelab_hub-windows-x64/framelab_hub.exe release-files/framelab_hub-windows-x64.exe || true
+          cp artifacts/framelab_hub-windows-ARM64/framelab_hub.exe release-files/framelab_hub-windows-arm64.exe || true
+          
+          # macOS
+          cp artifacts/framelab_hub-macos-x86_64/framelab_hub release-files/framelab_hub-macos-x86_64 || true
+          cp artifacts/framelab_hub-macos-arm64/framelab_hub release-files/framelab_hub-macos-arm64 || true
+          
+          # Linux x86/x64
+          cp artifacts/framelab_hub-linux-x64/framelab_hub release-files/framelab_hub-linux-x64 || true
+          cp artifacts/framelab_hub-linux-x86/framelab_hub release-files/framelab_hub-linux-x86 || true
+          
+          # Linux ARM
+          cp artifacts/framelab_hub-linux-aarch64/framelab_hub release-files/framelab_hub-linux-aarch64 || true
+          cp artifacts/framelab_hub-linux-armv7/framelab_hub release-files/framelab_hub-linux-armv7 || true
+          
+          echo "Pliki gotowe do wydania:"
+          ls -lh release-files
+
+      - name: Tworzenie GitHub Release i upload plików
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-build${{ github.run_number }}
+          name: FrameLab Hub v1.0.0 (Build #${{ github.run_number }})
+          draft: false
+          prerelease: false
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
