@@ -116,8 +116,20 @@ Theme currentTheme = THEME_PURPLE;
 std::string activeSimAppId = "";
 std::string activeSimProjectName = "Bez tytulu.flp";
 
-// Konfiguracja Firebase (Zastąp własnymi kluczami)
-const std::string FIREBASE_API_KEY = "AIzaSyDummyKeyReplaceThisWithYourOwn";
+// Konfiguracja Firebase
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+/*
+const firebaseConfig = {
+  apiKey: "AIzaSyB9MAeztrI-MT56gPfhUq3HhgVlOu18foo",
+  authDomain: "framelab-hub.firebaseapp.com",
+  projectId: "framelab-hub",
+  storageBucket: "framelab-hub.firebasestorage.app",
+  messagingSenderId: "8787494414",
+  appId: "1:8787494414:web:ce261de254afe1b78e9e5f",
+  measurementId: "G-7LHE04B0R3"
+};
+*/
+const std::string FIREBASE_API_KEY = "AIzaSyB9MAeztrI-MT56gPfhUq3HhgVlOu18foo";
 const std::string FIREBASE_DATABASE_URL = "https://framelab-hub-default-rtdb.firebaseio.com/";
 
 // Stan sesji Firebase
