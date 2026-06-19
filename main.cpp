@@ -149,6 +149,16 @@ struct AuroraCircle {
 };
 std::vector<AuroraCircle> auroraCircles;
 
+struct LoginParticle {
+    ImVec2 pos;
+    ImVec2 vel;
+    float radius;
+    ImVec4 color;
+    float alpha;
+    float speed;
+};
+std::vector<LoginParticle> loginParticles;
+
 std::vector<AppInfo> apps;
 std::vector<Project> projects;
 std::vector<Asset> assets;
@@ -487,6 +497,24 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
     return true;
 }
 
+void InitParticles(ImVec2 displaySize) {
+    loginParticles.clear();
+    for (int i = 0; i < 90; ++i) {
+        float r = 1.2f + (std::rand() % 150) / 100.0f; // 1.2 to 2.7 px
+        float alpha = 0.2f + (std::rand() % 50) / 100.0f; // 0.2 to 0.7
+        ImVec4 col = (std::rand() % 2 == 0) ? 
+            ImVec4(0.54f, 0.36f, 0.96f, alpha) : // fioletowa
+            ImVec4(0.02f, 0.71f, 0.83f, alpha);   // cyjanowa
+        
+        float px = std::rand() % (int)(displaySize.x > 0 ? displaySize.x : 1280);
+        float py = std::rand() % (int)(displaySize.y > 0 ? displaySize.y : 800);
+        float vx = ((std::rand() % 100) - 50) * 0.4f; // -20 to 20 px/s
+        float vy = ((std::rand() % 100) - 50) * 0.4f; // -20 to 20 px/s
+        float speed = 0.8f + (std::rand() % 100) / 100.0f;
+        loginParticles.push_back({ ImVec2(px, py), ImVec2(vx, vy), r, col, alpha, speed });
+    }
+}
+
 // Ekran logowania/rejestracji ImGui z animowaną zorzą w tle (Aurora background) i płynnym resizingiem
 void DrawAuroraBackground(ImVec2 displaySize, float deltaTime) {
     ImDrawList* drawList = ImGui::GetBackgroundDrawList();
@@ -513,9 +541,67 @@ void DrawAuroraBackground(ImVec2 displaySize, float deltaTime) {
             drawList->AddCircleFilled(circle.pos, r, col, 64);
         }
     }
+
+    // Aktualizacja i rysowanie interaktywnych cząsteczek
+    ImVec2 mousePos = ImGui::GetIO().MousePos;
+    bool hasMouse = ImGui::IsMousePosValid(&mousePos);
+
+    for (auto& p : loginParticles) {
+        // Ruch własny cząsteczki
+        p.pos.x += p.vel.x * deltaTime;
+        p.pos.y += p.vel.y * deltaTime;
+
+        // Reakcja na kursor myszy (przyciąganie)
+        if (hasMouse) {
+            float dx = mousePos.x - p.pos.x;
+            float dy = mousePos.y - p.pos.y;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            
+            if (dist < 250.0f && dist > 5.0f) {
+                float force = (250.0f - dist) / 250.0f; // siła wzrasta bliżej kursora
+                p.vel.x += (dx / dist) * force * deltaTime * 240.0f * p.speed;
+                p.vel.y += (dy / dist) * force * deltaTime * 240.0f * p.speed;
+            }
+            
+            // Rysowanie delikatnych linii połączeń z myszką dla bardzo bliskich cząsteczek
+            if (dist < 120.0f) {
+                float lineAlpha = (1.0f - (dist / 120.0f)) * 0.15f * p.alpha;
+                ImU32 lineCol = ImGui::ColorConvertFloat4ToU32(ImVec4(p.color.x, p.color.y, p.color.z, lineAlpha));
+                drawList->AddLine(p.pos, mousePos, lineCol, 1.0f);
+            }
+        }
+
+        // Tłumienie prędkości (tarcia), aby cząsteczki nie przyspieszały w nieskończoność
+        p.vel.x -= p.vel.x * deltaTime * 0.5f;
+        p.vel.y -= p.vel.y * deltaTime * 0.5f;
+
+        // Ograniczenie maksymalnej prędkości
+        float speedVal = std::sqrt(p.vel.x * p.vel.x + p.vel.y * p.vel.y);
+        float maxSpeed = 100.0f * p.speed;
+        if (speedVal > maxSpeed) {
+            p.vel.x = (p.vel.x / speedVal) * maxSpeed;
+            p.vel.y = (p.vel.y / speedVal) * maxSpeed;
+        }
+
+        // Zawijanie na krawędziach ekranu
+        if (p.pos.x < -10.0f) p.pos.x = displaySize.x + 10.0f;
+        if (p.pos.x > displaySize.x + 10.0f) p.pos.x = -10.0f;
+        if (p.pos.y < -10.0f) p.pos.y = displaySize.y + 10.0f;
+        if (p.pos.y > displaySize.y + 10.0f) p.pos.y = -10.0f;
+
+        // Rysowanie cząsteczki
+        ImU32 pCol = ImGui::ColorConvertFloat4ToU32(p.color);
+        drawList->AddCircleFilled(p.pos, p.radius, pCol, 8);
+    }
 }
 
 void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
+    static bool particlesInitialized = false;
+    if (!particlesInitialized) {
+        InitParticles(displaySize);
+        particlesInitialized = true;
+    }
+
     // Rysowanie animowanej zorzy w tle logowania
     DrawAuroraBackground(displaySize, deltaTime);
 
