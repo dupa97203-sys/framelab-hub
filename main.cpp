@@ -135,6 +135,7 @@ const std::string FIREBASE_DATABASE_URL = "https://framelab-hub-default-rtdb.fir
 // Stan sesji Firebase
 bool isLoggedIn = false;
 bool isOfflineMode = false;
+bool isSubscribed = false;
 std::string fbIdToken = "";
 std::string fbLocalId = "";
 
@@ -288,9 +289,10 @@ bool FirebaseSignUp(const std::string& email, const std::string& password, const
 
     // Zapisz profil (imię i e-mail) do Realtime Database
     std::string dbUrl = FIREBASE_DATABASE_URL + "users/" + localId + ".json?auth=" + idToken;
-    std::string dbPayload = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\"}";
+    std::string dbPayload = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"subscribed\":false}";
     PerformHTTPSRequest("PUT", dbUrl, dbPayload);
 
+    isSubscribed = false;
     snprintf(profileName, sizeof(profileName), "%s", name.c_str());
     snprintf(profileEmail, sizeof(profileEmail), "%s", email.c_str());
 
@@ -338,6 +340,9 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
         snprintf(profileName, sizeof(profileName), "%s", dbName.c_str());
     }
     snprintf(profileEmail, sizeof(profileEmail), "%s", email.c_str());
+
+    std::string dbSub = GetJSONValue(dbResponse, "subscribed");
+    isSubscribed = (dbSub == "true");
 
     return true;
 }
@@ -1228,30 +1233,23 @@ int main(int, char**) {
             float sidebarHeight = ImGui::GetContentRegionAvail().y;
             if (sidebarHeight > 180) {
                 // Przesunięcie na sam dół
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + sidebarHeight - 160.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + sidebarHeight - 120.0f);
                 
-                ImGui::Separator();
-                ImGui::Spacing();
-                ImGui::Text("Chmura FrameLab");
-                
-                // Liczenie zajętości
-                float cloudSizeGB = 12.4f + (assets.size() * 0.1f) + (projects.size() * 0.05f);
-                float progressVal = cloudSizeGB / 50.0f;
-                
-                std::string progressLabel = std::to_string((int)cloudSizeGB) + " GB / 50 GB";
-                ImGui::ProgressBar(progressVal, ImVec2(ImGui::GetContentRegionAvail().x - 10, 15), progressLabel.c_str());
-                
-                ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::Spacing();
                 
                 // Profil użytkownika
                 ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "Avatar  %s", profileName);
-                ImGui::TextDisabled("Plan Premium Creator");
+                if (isSubscribed) {
+                    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.9f, 1.0f), "Plan Premium Creator");
+                } else {
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Konto Darmowe");
+                }
                 ImGui::Spacing();
                 if (ImGui::Button(isOfflineMode ? "Zaloguj sie" : "Wyloguj sie", ImVec2(ImGui::GetContentRegionAvail().x - 10, 24))) {
                     isLoggedIn = false;
                     isOfflineMode = false;
+                    isSubscribed = false;
                     fbIdToken = "";
                     fbLocalId = "";
                     snprintf(profileName, sizeof(profileName), "Aleksandra Kowalska");
@@ -1294,7 +1292,7 @@ int main(int, char**) {
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(1,1,0,1), "* Aktualizacja FrameLab Motions");
                 ImGui::TextDisabled("5 minut temu");
-                ImGui::TextColored(ImVec4(0,1,0,1), "* Wyrenderowano wideo w chmurze");
+                ImGui::TextColored(ImVec4(0,1,0,1), "* Wyrenderowano wideo");
                 ImGui::TextDisabled("1 godzina temu");
                 ImGui::Text("* Pobrano nowa czcionke: Outfit");
                 ImGui::TextDisabled("Wczoraj");
@@ -1370,42 +1368,42 @@ int main(int, char**) {
                 ImGui::SetColumnWidth(0, 480);
 
                 // Kolumna 0: Kołowy wykres zasobów i statystyki
-                ImGui::BeginChild("ResourcesSummary", ImVec2(0, 180), true);
+                ImGui::BeginChild("SubscriptionWidget", ImVec2(0, 180), true);
                 if (fontBold) ImGui::PushFont(fontBold);
-                ImGui::Text("Podsumowanie zasobów");
+                ImGui::Text("Subskrypcja FrameLab Premium");
                 if (fontBold) ImGui::PopFont();
                 ImGui::Separator();
+                ImGui::Spacing();
 
-                // Rysowanie wykresu kołowego ImGui
-                ImDrawList* drawList = ImGui::GetWindowDrawList();
-                ImVec2 pos = ImGui::GetCursorScreenPos();
-                ImVec2 center = ImVec2(pos.x + 80, pos.y + 70);
-                float radius = 45.0f;
-                float thickness = 10.0f;
-
-                // Okrąg tła
-                drawList->AddCircle(center, radius, IM_COL32(40, 40, 50, 255), 36, thickness);
-                
-                // Okrąg wskaźnika (25% zużycia)
-                float cloudSizeGB = 12.4f + (assets.size() * 0.1f) + (projects.size() * 0.05f);
-                float progressVal = cloudSizeGB / 50.0f;
-                
-                drawList->PathArcTo(center, radius, -3.14159265f * 0.5f, -3.14159265f * 0.5f + progressVal * 3.14159265f * 2.0f, 36);
-                drawList->PathStroke(ImGui::GetColorU32(ImGuiCol_CheckMark), 0, thickness);
-
-                // Tekst wewnątrz
-                std::string percentStr = std::to_string((int)(progressVal * 100)) + "%";
-                ImVec2 percentTextSize = ImGui::CalcTextSize(percentStr.c_str());
-                drawList->AddText(ImVec2(center.x - percentTextSize.x/2.0f, center.y - 12.0f), IM_COL32(255, 255, 255, 255), percentStr.c_str());
-                drawList->AddText(ImVec2(center.x - 12.0f, center.y + 3.0f), IM_COL32(150, 150, 150, 255), "Dysk");
-
-                // Legenda po prawej
-                ImGui::SetCursorPos(ImVec2(160, 40));
-                ImGui::Text("* Biblioteka plików: %d plików", (int)assets.size());
-                ImGui::SetCursorPos(ImVec2(160, 65));
-                ImGui::Text("* Aktywne projekty: %d pliki", (int)projects.size());
-                ImGui::SetCursorPos(ImVec2(160, 90));
-                ImGui::Text("* Zainstalowane: 3 aplikacje");
+                if (isSubscribed) {
+                    ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, 1.0f), "[ AKTYWNA ] Masz pelny dostep do pakietu Premium!");
+                    ImGui::Spacing();
+                    ImGui::BulletText("Odblokowane wszystkie narzedzia (Motions, Studio, Design)");
+                    ImGui::BulletText("Nieograniczony eksport projektow");
+                    ImGui::BulletText("Priorytetowe renderowanie GPU");
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("Dziekujemy, ze jestes z nami!");
+                } else {
+                    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.1f, 1.0f), "Uzyskaj dostep do wszystkich funkcji premium.");
+                    ImGui::Spacing();
+                    
+                    if (ImGui::Button("KUP SUBSKRYPCJE PREMIUM ($9.99/mc)", ImVec2(ImGui::GetContentRegionAvail().x - 10, 40))) {
+                        if (isOfflineMode) {
+                            isSubscribed = true;
+                            ShowToast("Kupiono subskrypcje (Tryb Offline)", "success");
+                        } else if (!fbLocalId.empty()) {
+                            std::string dbUrl = FIREBASE_DATABASE_URL + "users/" + fbLocalId + ".json?auth=" + fbIdToken;
+                            std::string dbPayload = "{\"subscribed\":true}";
+                            PerformHTTPSRequest("PATCH", dbUrl, dbPayload);
+                            isSubscribed = true;
+                            ShowToast("Subskrypcja zakupiona pomyslnie!", "success");
+                        } else {
+                            ShowToast("Musisz byc zalogowany, aby kupic subskrypcje.", "warning");
+                        }
+                    }
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("* Odblokuj os czasu, wiecej warstw i eksport projektów.");
+                }
 
                 ImGui::EndChild();
 
@@ -1561,7 +1559,7 @@ int main(int, char**) {
                 // ZAKŁADKA: ZASOBY (ASSETS)
                 // ==========================================
                 if (fontBold) ImGui::PushFont(fontBold);
-                ImGui::Text("Biblioteka Zasobów Chmury");
+                ImGui::Text("Biblioteka Lokalnych Zasobów");
                 if (fontBold) ImGui::PopFont();
                 ImGui::Separator();
                 ImGui::Spacing();
