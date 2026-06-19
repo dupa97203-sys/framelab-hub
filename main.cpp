@@ -10,6 +10,9 @@
 #include <algorithm>
 #include <thread>
 #include <map>
+#include <fstream>
+#include <cstdio>
+#include <cstdlib>
 
 // Dear ImGui & Backends
 #include "imgui.h"
@@ -113,6 +116,16 @@ Theme currentTheme = THEME_PURPLE;
 std::string activeSimAppId = "";
 std::string activeSimProjectName = "Bez tytulu.flp";
 
+// Konfiguracja Firebase (Zastąp własnymi kluczami)
+const std::string FIREBASE_API_KEY = "AIzaSyDummyKeyReplaceThisWithYourOwn";
+const std::string FIREBASE_DATABASE_URL = "https://framelab-hub-default-rtdb.firebaseio.com/";
+
+// Stan sesji Firebase
+bool isLoggedIn = false;
+bool isOfflineMode = false;
+std::string fbIdToken = "";
+std::string fbLocalId = "";
+
 std::vector<AppInfo> apps;
 std::vector<Project> projects;
 std::vector<Asset> assets;
@@ -147,12 +160,294 @@ bool optGpuAccel = true;
 bool optRunAtStartup = false;
 bool notifDropdownOpen = false;
 
+// Zmienne formularza logowania/rejestracji
+char loginEmail[128] = "";
+char loginPassword[128] = "";
+char registerName[128] = "";
+char registerEmail[128] = "";
+char registerPassword[128] = "";
+bool isRegisteringMode = false;
+std::string loginErrorMsg = "";
+bool loginLoading = false;
+
 // Deklaracje zapowiadające
 void deleteShape(int id, void* event);
 
 // Pomocnicze funkcje powiadomień toast
 void ShowToast(const std::string& message, const std::string& type = "success") {
     toasts.push_back({ message, type, 4.0f });
+}
+
+// Bezpieczne zapytanie HTTPS za pomocą systemowego cURL (bezpośrednie wywołanie)
+std::string PerformHTTPSRequest(const std::string& method, const std::string& url, const std::string& jsonPayload) {
+    std::string tempFilename = "temp_fb_req.json";
+    {
+        std::ofstream tempFile(tempFilename);
+        if (tempFile.is_open()) {
+            tempFile << jsonPayload;
+        }
+    }
+
+    std::string cmd;
+#ifdef _WIN32
+    cmd = "curl -s -X " + method + " -H \"Content-Type: application/json\" -d @" + tempFilename + " \"" + url + "\"";
+#else
+    cmd = "curl -s -X " + method + " -H 'Content-Type: application/json' -d @" + tempFilename + " '" + url + "'";
+#endif
+
+    std::string result;
+    char buffer[256];
+#ifdef _WIN32
+    FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+    FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+
+    if (pipe) {
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            result += buffer;
+        }
+#ifdef _WIN32
+        _pclose(pipe);
+#else
+        pclose(pipe);
+#endif
+    }
+
+    std::remove(tempFilename.c_str());
+    return result;
+}
+
+// Prosty parser JSON
+std::string GetJSONValue(const std::string& json, const std::string& key) {
+    std::string searchKey = "\"" + key + "\"";
+    size_t keyPos = json.find(searchKey);
+    if (keyPos == std::string::npos) return "";
+
+    size_t colonPos = json.find(":", keyPos + searchKey.length());
+    if (colonPos == std::string::npos) return "";
+
+    size_t valStart = json.find_first_not_of(" \t\r\n", colonPos + 1);
+    if (valStart == std::string::npos) return "";
+
+    if (json[valStart] == '\"') {
+        size_t valEnd = json.find("\"", valStart + 1);
+        if (valEnd == std::string::npos) return "";
+        return json.substr(valStart + 1, valEnd - valStart - 1);
+    } else {
+        size_t valEnd = json.find_first_of(",}", valStart);
+        if (valEnd == std::string::npos) {
+            valEnd = json.length();
+        }
+        std::string val = json.substr(valStart, valEnd - valStart);
+        val.erase(std::remove_if(val.begin(), val.end(), ::isspace), val.end());
+        return val;
+    }
+}
+
+// Uwierzytelnianie Firebase: Rejestracja
+bool FirebaseSignUp(const std::string& email, const std::string& password, const std::string& name, std::string& errorMsg) {
+    if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
+        errorMsg = "Firebase nie jest skonfigurowany. Uzyj Trybu Offline.";
+        return false;
+    }
+    std::string url = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + FIREBASE_API_KEY;
+    std::string payload = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"returnSecureToken\":true}";
+    
+    std::string response = PerformHTTPSRequest("POST", url, payload);
+    std::string errorVal = GetJSONValue(response, "message");
+    if (!errorVal.empty()) {
+        if (errorVal == "EMAIL_EXISTS") errorMsg = "Ten e-mail jest juz zarejestrowany.";
+        else if (errorVal == "INVALID_EMAIL") errorMsg = "Niepoprawny format adresu e-mail.";
+        else if (errorVal == "WEAK_PASSWORD") errorMsg = "Haslo musi miec co najmniej 6 znakow.";
+        else errorMsg = "Blad rejestracji: " + errorVal;
+        return false;
+    }
+
+    std::string localId = GetJSONValue(response, "localId");
+    std::string idToken = GetJSONValue(response, "idToken");
+    if (localId.empty() || idToken.empty()) {
+        errorMsg = "Nieznany blad serwera Firebase.";
+        return false;
+    }
+
+    fbLocalId = localId;
+    fbIdToken = idToken;
+
+    // Zapisz profil (imię i e-mail) do Realtime Database
+    std::string dbUrl = FIREBASE_DATABASE_URL + "users/" + localId + ".json?auth=" + idToken;
+    std::string dbPayload = "{\"name\":\"" + name + "\",\"email\":\"" + email + "\"}";
+    PerformHTTPSRequest("PUT", dbUrl, dbPayload);
+
+    snprintf(profileName, sizeof(profileName), "%s", name.c_str());
+    snprintf(profileEmail, sizeof(profileEmail), "%s", email.c_str());
+
+    return true;
+}
+
+// Uwierzytelnianie Firebase: Logowanie
+bool FirebaseSignIn(const std::string& email, const std::string& password, std::string& errorMsg) {
+    if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
+        errorMsg = "Firebase nie jest skonfigurowany. Uzyj Trybu Offline.";
+        return false;
+    }
+    std::string url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + FIREBASE_API_KEY;
+    std::string payload = "{\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"returnSecureToken\":true}";
+    
+    std::string response = PerformHTTPSRequest("POST", url, payload);
+    std::string errorVal = GetJSONValue(response, "message");
+    if (!errorVal.empty()) {
+        if (errorVal == "EMAIL_NOT_FOUND" || errorVal == "INVALID_LOGIN_CREDENTIALS" || errorVal == "INVALID_PASSWORD") {
+            errorMsg = "Bledny e-mail lub haslo.";
+        } else if (errorVal == "USER_DISABLED") {
+            errorMsg = "To konto zostalo zablokowane.";
+        } else {
+            errorMsg = "Blad logowania: " + errorVal;
+        }
+        return false;
+    }
+
+    std::string localId = GetJSONValue(response, "localId");
+    std::string idToken = GetJSONValue(response, "idToken");
+    if (localId.empty() || idToken.empty()) {
+        errorMsg = "Nieznany blad serwera Firebase.";
+        return false;
+    }
+
+    fbLocalId = localId;
+    fbIdToken = idToken;
+
+    // Pobierz profil z bazy danych
+    std::string dbUrl = FIREBASE_DATABASE_URL + "users/" + localId + ".json?auth=" + idToken;
+    std::string dbResponse = PerformHTTPSRequest("GET", dbUrl, "");
+    
+    std::string dbName = GetJSONValue(dbResponse, "name");
+    if (!dbName.empty()) {
+        snprintf(profileName, sizeof(profileName), "%s", dbName.c_str());
+    }
+    snprintf(profileEmail, sizeof(profileEmail), "%s", email.c_str());
+
+    return true;
+}
+
+// Ekran logowania/rejestracji ImGui
+void RenderLoginScreen(ImVec2 displaySize) {
+    ImGui::SetNextWindowPos(ImVec2(displaySize.x / 2.0f, displaySize.y / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(440, 500));
+    
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 0.98f));
+    ImGui::Begin("Logowanie / Rejestracja", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+    
+    if (fontBold) ImGui::PushFont(fontBold);
+    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.9f, 1.0f), "      F R A M E L A B  H U B");
+    if (fontBold) ImGui::PopFont();
+    
+    ImGui::TextDisabled("            Bezpieczne logowanie przez Firebase");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (!isRegisteringMode) {
+        ImGui::Text("E-mail");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::InputText("##login_email", loginEmail, IM_ARRAYSIZE(loginEmail));
+        ImGui::Spacing();
+
+        ImGui::Text("Haslo");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::InputText("##login_pass", loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
+        ImGui::Spacing();
+
+        if (!loginLoading) {
+            if (ImGui::Button("Zaloguj sie", ImVec2(ImGui::GetContentRegionAvail().x, 35))) {
+                loginLoading = true;
+                loginErrorMsg = "";
+                std::string err;
+                if (FirebaseSignIn(loginEmail, loginPassword, err)) {
+                    isLoggedIn = true;
+                    ShowToast("Zalogowano pomyslnie!", "success");
+                } else {
+                    loginErrorMsg = err;
+                }
+                loginLoading = false;
+            }
+        } else {
+            ImGui::Button("Logowanie...", ImVec2(ImGui::GetContentRegionAvail().x, 35));
+        }
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Nie masz konta? Zarejestruj sie").x) / 2.0f);
+        if (ImGui::Selectable("Nie masz konta? Zarejestruj sie", false, 0, ImGui::CalcTextSize("Nie masz konta? Zarejestruj sie"))) {
+            isRegisteringMode = true;
+            loginErrorMsg = "";
+        }
+    } else {
+        ImGui::Text("Imie / Nazwa profilu");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::InputText("##reg_name", registerName, IM_ARRAYSIZE(registerName));
+        ImGui::Spacing();
+
+        ImGui::Text("E-mail");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::InputText("##reg_email", registerEmail, IM_ARRAYSIZE(registerEmail));
+        ImGui::Spacing();
+
+        ImGui::Text("Haslo (min. 6 znakow)");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::InputText("##reg_pass", registerPassword, IM_ARRAYSIZE(registerPassword), ImGuiInputTextFlags_Password);
+        ImGui::Spacing();
+
+        if (!loginLoading) {
+            if (ImGui::Button("Zarejestruj sie", ImVec2(ImGui::GetContentRegionAvail().x, 35))) {
+                loginLoading = true;
+                loginErrorMsg = "";
+                std::string err;
+                if (FirebaseSignUp(registerEmail, registerPassword, registerName, err)) {
+                    isLoggedIn = true;
+                    ShowToast("Konto utworzone i zalogowane!", "success");
+                } else {
+                    loginErrorMsg = err;
+                }
+                loginLoading = false;
+            }
+        } else {
+            ImGui::Button("Rejestracja...", ImVec2(ImGui::GetContentRegionAvail().x, 35));
+        }
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Masz juz konto? Zaloguj sie").x) / 2.0f);
+        if (ImGui::Selectable("Masz juz konto? Zaloguj sie", false, 0, ImGui::CalcTextSize("Masz juz konto? Zaloguj sie"))) {
+            isRegisteringMode = false;
+            loginErrorMsg = "";
+        }
+    }
+
+    if (!loginErrorMsg.empty()) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "%s", loginErrorMsg.c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button("Praca w trybie Offline (Demo)", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+        isOfflineMode = true;
+        ShowToast("Tryb offline (wersja demonstracyjna)", "info");
+    }
+
+    if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.6f, 0.1f, 1.0f));
+        ImGui::TextWrapped("Info: Firebase nie jest skonfigurowany w kodzie. Zaloguj sie przyciskiem Offline.");
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::End();
+    ImGui::PopStyleColor();
 }
 
 // Zmiana motywu w locie
@@ -396,8 +691,12 @@ int main(int, char**) {
             ImGui::End();
         }
 
-        // Przełączenie widoku - Symulator zajmuje całe okno
-        if (currentTab == TAB_SIMULATOR) {
+        // Nowy warunek uwierzytelniania
+        if (!isLoggedIn && !isOfflineMode) {
+            RenderLoginScreen(io.DisplaySize);
+        } else {
+            // Przełączenie widoku - Symulator zajmuje całe okno
+            if (currentTab == TAB_SIMULATOR) {
             ImGui::SetNextWindowPos(ImVec2(0, 0));
             ImGui::SetNextWindowSize(io.DisplaySize);
             ImGui::Begin("SimulatorWindow", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_MenuBar);
@@ -937,6 +1236,16 @@ int main(int, char**) {
                 // Profil użytkownika
                 ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "Avatar  %s", profileName);
                 ImGui::TextDisabled("Plan Premium Creator");
+                ImGui::Spacing();
+                if (ImGui::Button(isOfflineMode ? "Zaloguj sie" : "Wyloguj sie", ImVec2(ImGui::GetContentRegionAvail().x - 10, 24))) {
+                    isLoggedIn = false;
+                    isOfflineMode = false;
+                    fbIdToken = "";
+                    fbLocalId = "";
+                    snprintf(profileName, sizeof(profileName), "Aleksandra Kowalska");
+                    snprintf(profileEmail, sizeof(profileEmail), "aleksandra@framelab.io");
+                    ShowToast("Wylogowano.", "info");
+                }
             }
 
             ImGui::EndChild();
@@ -1356,6 +1665,7 @@ int main(int, char**) {
             ImGui::EndChild();
             ImGui::End();
         }
+        } // Koniec bloku else dla uwierzytelniania
 
         // Koniec klatki ImGui, rysowanie
         ImGui::Render();
