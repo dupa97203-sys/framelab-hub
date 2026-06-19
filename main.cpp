@@ -582,22 +582,6 @@ void RenderLoginScreen(ImVec2 displaySize) {
         ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "%s", loginErrorMsg.c_str());
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    if (ImGui::Button("Praca w trybie Offline (Demo)", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
-        isOfflineMode = true;
-        ShowToast("Tryb offline (wersja demonstracyjna)", "info");
-    }
-
-    if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
-        ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.6f, 0.1f, 1.0f));
-        ImGui::TextWrapped("Info: Firebase nie jest skonfigurowany w kodzie. Zaloguj sie przyciskiem Offline.");
-        ImGui::PopStyleColor();
-    }
-
     ImGui::End();
     ImGui::PopStyleColor();
 }
