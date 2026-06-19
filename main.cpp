@@ -141,6 +141,16 @@ std::string fbLocalId = "";
 std::string fbSessionHash = "";
 bool rememberMe = true;
 
+enum Language {
+    LANG_PL,
+    LANG_EN,
+    LANG_DE,
+    LANG_NO,
+    LANG_FR,
+    LANG_SE
+};
+Language currentLanguage = LANG_PL;
+
 struct AuroraCircle {
     ImVec2 pos;
     ImVec2 vel;
@@ -276,6 +286,150 @@ std::string GetJSONValue(const std::string& json, const std::string& key) {
         val.erase(std::remove_if(val.begin(), val.end(), ::isspace), val.end());
         return val;
     }
+}
+
+// Tłumacz tekstów interfejsu logowania
+std::string T(const std::string& key) {
+    if (currentLanguage == LANG_EN) {
+        if (key == "login_title") return "F R A M E L A B  H U B";
+        if (key == "login_subtitle") return "Cloud Account Authentication";
+        if (key == "email") return "Email Address";
+        if (key == "email_hint") return "e.g. john.doe@email.com";
+        if (key == "password") return "Password";
+        if (key == "password_hint") return "Enter password";
+        if (key == "remember_me") return "Remember me on this device";
+        if (key == "login_btn") return "LOG IN";
+        if (key == "login_loading") return "Logging in...";
+        if (key == "no_account") return "Don't have an account? Sign up";
+        if (key == "has_account") return "Already have an account? Log in";
+        if (key == "username") return "Username / Name";
+        if (key == "username_hint") return "e.g. John";
+        if (key == "reg_password") return "Password (min. 6 characters)";
+        if (key == "register_btn") return "SIGN UP";
+        if (key == "register_loading") return "Registering...";
+        if (key == "logout") return "Log out";
+        if (key == "login_text") return "Log in";
+        if (key == "toast_logged_out") return "Logged out.";
+        if (key == "toast_logged_in") return "Logged in successfully!";
+        if (key == "toast_registered") return "Account created and logged in!";
+    }
+    else if (currentLanguage == LANG_DE) {
+        if (key == "login_title") return "F R A M E L A B  H U B";
+        if (key == "login_subtitle") return "Cloud-Konto Authentifizierung";
+        if (key == "email") return "E-Mail-Adresse";
+        if (key == "email_hint") return "z.B. max.mustermann@email.com";
+        if (key == "password") return "Passwort";
+        if (key == "password_hint") return "Passwort eingeben";
+        if (key == "remember_me") return "Auf diesem Gerät merken";
+        if (key == "login_btn") return "EINLOGGEN";
+        if (key == "login_loading") return "Einloggen...";
+        if (key == "no_account") return "Noch kein Konto? Registrieren";
+        if (key == "has_account") return "Bereits ein Konto? Einloggen";
+        if (key == "username") return "Benutzername / Name";
+        if (key == "username_hint") return "z.B. Max";
+        if (key == "reg_password") return "Passwort (mind. 6 Zeichen)";
+        if (key == "register_btn") return "REGISTRIEREN";
+        if (key == "register_loading") return "Registrieren...";
+        if (key == "logout") return "Ausloggen";
+        if (key == "login_text") return "Einloggen";
+        if (key == "toast_logged_out") return "Ausgeloggt.";
+        if (key == "toast_logged_in") return "Erfolgreich eingeloggt!";
+        if (key == "toast_registered") return "Konto erstellt und eingeloggt!";
+    }
+    else if (currentLanguage == LANG_NO) {
+        if (key == "login_title") return "F R A M E L A B  H U B";
+        if (key == "login_subtitle") return "Skyaustentisering";
+        if (key == "email") return "E-postadresse";
+        if (key == "email_hint") return "f.eks. ola.nordmann@email.com";
+        if (key == "password") return "Passord";
+        if (key == "password_hint") return "Skriv inn passord";
+        if (key == "remember_me") return "Husk meg på denne enheten";
+        if (key == "login_btn") return "LOGG INN";
+        if (key == "login_loading") return "Logger inn...";
+        if (key == "no_account") return "Har du ikke konto? Registrer deg";
+        if (key == "has_account") return "Har du allerede konto? Logg inn";
+        if (key == "username") return "Brukernavn / Navn";
+        if (key == "username_hint") return "f.eks. Ola";
+        if (key == "reg_password") return "Passord (min. 6 tegn)";
+        if (key == "register_btn") return "REGISTRER DEG";
+        if (key == "register_loading") return "Registrerer...";
+        if (key == "logout") return "Logg ut";
+        if (key == "login_text") return "Logg inn";
+        if (key == "toast_logged_out") return "Logget ut.";
+        if (key == "toast_logged_in") return "Logget inn!";
+        if (key == "toast_registered") return "Konto opprettet og logget inn!";
+    }
+    else if (currentLanguage == LANG_FR) {
+        if (key == "login_title") return "F R A M E L A B  H U B";
+        if (key == "login_subtitle") return "Authentification du compte cloud";
+        if (key == "email") return "Adresse e-mail";
+        if (key == "email_hint") return "ex. jean.dupont@email.com";
+        if (key == "password") return "Mot de passe";
+        if (key == "password_hint") return "Saisir le mot de passe";
+        if (key == "remember_me") return "Se souvenir de moi";
+        if (key == "login_btn") return "SE CONNECTER";
+        if (key == "login_loading") return "Connexion...";
+        if (key == "no_account") return "Pas de compte? S'inscrire";
+        if (key == "has_account") return "Déjà un compte? Se connecter";
+        if (key == "username") return "Nom d'utilisateur / Nom";
+        if (key == "username_hint") return "ex. Jean";
+        if (key == "reg_password") return "Mot de passe (min. 6 caractères)";
+        if (key == "register_btn") return "S'INSCRIRE";
+        if (key == "register_loading") return "Inscription...";
+        if (key == "logout") return "Se déconnecter";
+        if (key == "login_text") return "Se connecter";
+        if (key == "toast_logged_out") return "Déconnecté.";
+        if (key == "toast_logged_in") return "Connecté avec succès!";
+        if (key == "toast_registered") return "Compte créé et connecté!";
+    }
+    else if (currentLanguage == LANG_SE) {
+        if (key == "login_title") return "F R A M E L A B  H U B";
+        if (key == "login_subtitle") return "Molnkontoautentisering";
+        if (key == "email") return "E-postadress";
+        if (key == "email_hint") return "t.ex. sven.svensson@email.com";
+        if (key == "password") return "Lösenord";
+        if (key == "password_hint") return "Ange lösenord";
+        if (key == "remember_me") return "Kom ihåg mig på den här enheten";
+        if (key == "login_btn") return "LOGGA IN";
+        if (key == "login_loading") return "Loggar in...";
+        if (key == "no_account") return "Har du inget konto? Registrera dig";
+        if (key == "has_account") return "Har du redan ett konto? Logga in";
+        if (key == "username") return "Användarnamn / Namn";
+        if (key == "username_hint") return "t.ex. Sven";
+        if (key == "reg_password") return "Lösenord (min. 6 tecken)";
+        if (key == "register_btn") return "REGISTRERA DIG";
+        if (key == "register_loading") return "Registrerar...";
+        if (key == "logout") return "Logga ut";
+        if (key == "login_text") return "Logga in";
+        if (key == "toast_logged_out") return "Utloggad.";
+        if (key == "toast_logged_in") return "Inloggad!";
+        if (key == "toast_registered") return "Konto skapat och inloggat!";
+    }
+    
+    // PL
+    if (key == "login_title") return "F R A M E L A B  H U B";
+    if (key == "login_subtitle") return "Uwierzytelnianie konta w chmurze";
+    if (key == "email") return "Adres E-mail";
+    if (key == "email_hint") return "np. jan.kowalski@email.com";
+    if (key == "password") return "Hasło dostępu";
+    if (key == "password_hint") return "Wprowadz haslo";
+    if (key == "remember_me") return "Zapamietaj mnie na tym urzadzeniu";
+    if (key == "login_btn") return "ZALOGUJ SIE";
+    if (key == "login_loading") return "Logowanie...";
+    if (key == "no_account") return "Nie masz konta? Zarejestruj sie";
+    if (key == "has_account") return "Masz juz konto? Zaloguj sie";
+    if (key == "username") return "Nazwa użytkownika / Imię";
+    if (key == "username_hint") return "np. Aleksandra";
+    if (key == "reg_password") return "Hasło (min. 6 znaków)";
+    if (key == "register_btn") return "ZAREJESTRUJ SIE";
+    if (key == "register_loading") return "Rejestracja...";
+    if (key == "logout") return "Wyloguj sie";
+    if (key == "login_text") return "Zaloguj sie";
+    if (key == "toast_logged_out") return "Wylogowano.";
+    if (key == "toast_logged_in") return "Zalogowano pomyslnie!";
+    if (key == "toast_registered") return "Konto utworzone i zalogowane!";
+    
+    return key;
 }
 
 // Generowanie losowego hasha sesji (sliding session token)
@@ -439,6 +593,7 @@ bool FirebaseSignUp(const std::string& email, const std::string& password, const
         DeleteLocalSession();
     }
 
+    ShowToast(T("toast_registered"), "success");
     return true;
 }
 
@@ -494,6 +649,7 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
         DeleteLocalSession();
     }
 
+    ShowToast(T("toast_logged_in"), "success");
     return true;
 }
 
@@ -605,6 +761,24 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
     // Rysowanie animowanej zorzy w tle logowania
     DrawAuroraBackground(displaySize, deltaTime);
 
+    // Rysowanie selektora języka w prawym górnym rogu ekranu (szklany dropdown)
+    ImGui::SetNextWindowPos(ImVec2(displaySize.x - 170.0f, 15.0f));
+    ImGui::SetNextWindowSize(ImVec2(150.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 0.70f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::Begin("LanguageSelector", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+    
+    const char* languages[] = { "Polski", "English", "Deutsch", "Norsk", "Français", "Svenska" };
+    int comboLang = (int)currentLanguage;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    if (ImGui::Combo("##lang_combo", &comboLang, languages, IM_ARRAYSIZE(languages))) {
+        currentLanguage = (Language)comboLang;
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+
     // Obliczanie płynnej wysokości okna (smooth damp) w zależności od wybranego trybu
     float targetHeight = isRegisteringMode ? 440.0f : 340.0f;
     static float currentHeight = targetHeight;
@@ -636,7 +810,7 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
     
     // Animowany nagłówek z przechodzącym kolorem (neon transition title)
     float windowWidth = ImGui::GetWindowWidth();
-    std::string titleStr = "F R A M E L A B  H U B";
+    std::string titleStr = T("login_title");
     ImVec2 titleSize = fontBold ? fontBold->CalcTextSizeA(20.0f, FLT_MAX, 0.0f, titleStr.c_str()) : ImGui::CalcTextSize(titleStr.c_str());
     ImGui::SetCursorPosX((windowWidth - titleSize.x) / 2.0f);
     
@@ -646,7 +820,7 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
     ImGui::TextColored(titleCol, "%s", titleStr.c_str());
     if (fontBold) ImGui::PopFont();
     
-    std::string subTitleStr = "Uwierzytelnianie konta w chmurze";
+    std::string subTitleStr = T("login_subtitle");
     ImVec2 subSize = ImGui::CalcTextSize(subTitleStr.c_str());
     ImGui::SetCursorPosX((windowWidth - subSize.x) / 2.0f);
     ImGui::TextDisabled("%s", subTitleStr.c_str());
@@ -656,17 +830,17 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
     ImGui::Spacing();
 
     if (!isRegisteringMode) {
-        ImGui::TextDisabled("Adres E-mail");
+        ImGui::TextDisabled("%s", T("email").c_str());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputTextWithHint("##login_email", "np. jan.kowalski@email.com", loginEmail, IM_ARRAYSIZE(loginEmail));
+        ImGui::InputTextWithHint("##login_email", T("email_hint").c_str(), loginEmail, IM_ARRAYSIZE(loginEmail));
         ImGui::Spacing();
 
-        ImGui::TextDisabled("Hasło dostępu");
+        ImGui::TextDisabled("%s", T("password").c_str());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputTextWithHint("##login_pass", "Wprowadz haslo", loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
+        ImGui::InputTextWithHint("##login_pass", T("password_hint").c_str(), loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
         ImGui::Spacing();
 
-        ImGui::Checkbox("Zapamietaj mnie na tym urzadzeniu", &rememberMe);
+        ImGui::Checkbox(T("remember_me").c_str(), &rememberMe);
         ImGui::Spacing();
 
         if (!loginLoading) {
@@ -674,13 +848,12 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.48f, 0.98f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.28f, 0.88f, 1.0f));
             
-            if (ImGui::Button("ZALOGUJ SIE", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
+            if (ImGui::Button(T("login_btn").c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                 loginLoading = true;
                 loginErrorMsg = "";
                 std::string err;
                 if (FirebaseSignIn(loginEmail, loginPassword, err)) {
                     isLoggedIn = true;
-                    ShowToast("Zalogowano pomyslnie!", "success");
                 } else {
                     loginErrorMsg = err;
                 }
@@ -688,29 +861,29 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
             }
             ImGui::PopStyleColor(3);
         } else {
-            ImGui::Button("Logowanie...", ImVec2(ImGui::GetContentRegionAvail().x, 38));
+            ImGui::Button(T("login_loading").c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 38));
         }
 
         ImGui::Spacing();
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Nie masz konta? Zarejestruj sie").x) / 2.0f);
-        if (ImGui::Selectable("Nie masz konta? Zarejestruj sie", false, 0, ImGui::CalcTextSize("Nie masz konta? Zarejestruj sie"))) {
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(T("no_account").c_str()).x) / 2.0f);
+        if (ImGui::Selectable(T("no_account").c_str(), false, 0, ImGui::CalcTextSize(T("no_account").c_str()))) {
             isRegisteringMode = true;
             loginErrorMsg = "";
         }
     } else {
-        ImGui::TextDisabled("Nazwa użytkownika / Imię");
+        ImGui::TextDisabled("%s", T("username").c_str());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputTextWithHint("##reg_name", "np. Aleksandra", registerName, IM_ARRAYSIZE(registerName));
+        ImGui::InputTextWithHint("##reg_name", T("username_hint").c_str(), registerName, IM_ARRAYSIZE(registerName));
         ImGui::Spacing();
 
-        ImGui::TextDisabled("Adres E-mail");
+        ImGui::TextDisabled("%s", T("email").c_str());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputTextWithHint("##reg_email", "twoj@email.com", registerEmail, IM_ARRAYSIZE(registerEmail));
+        ImGui::InputTextWithHint("##reg_email", T("email_hint").c_str(), registerEmail, IM_ARRAYSIZE(registerEmail));
         ImGui::Spacing();
 
-        ImGui::TextDisabled("Hasło (min. 6 znaków)");
+        ImGui::TextDisabled("%s", T("reg_password").c_str());
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputTextWithHint("##reg_pass", "Wprowadz haslo", registerPassword, IM_ARRAYSIZE(registerPassword), ImGuiInputTextFlags_Password);
+        ImGui::InputTextWithHint("##reg_pass", T("password_hint").c_str(), registerPassword, IM_ARRAYSIZE(registerPassword), ImGuiInputTextFlags_Password);
         ImGui::Spacing();
 
         if (!loginLoading) {
@@ -718,13 +891,12 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.48f, 0.98f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.28f, 0.88f, 1.0f));
             
-            if (ImGui::Button("ZAREJESTRUJ SIE", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
+            if (ImGui::Button(T("register_btn").c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                 loginLoading = true;
                 loginErrorMsg = "";
                 std::string err;
                 if (FirebaseSignUp(registerEmail, registerPassword, registerName, err)) {
                     isLoggedIn = true;
-                    ShowToast("Konto utworzone i zalogowane!", "success");
                 } else {
                     loginErrorMsg = err;
                 }
@@ -732,12 +904,12 @@ void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
             }
             ImGui::PopStyleColor(3);
         } else {
-            ImGui::Button("Rejestracja...", ImVec2(ImGui::GetContentRegionAvail().x, 38));
+            ImGui::Button(T("register_loading").c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 38));
         }
 
         ImGui::Spacing();
-        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Masz juz konto? Zaloguj sie").x) / 2.0f);
-        if (ImGui::Selectable("Masz juz konto? Zaloguj sie", false, 0, ImGui::CalcTextSize("Masz juz konto? Zaloguj sie"))) {
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize(T("has_account").c_str()).x) / 2.0f);
+        if (ImGui::Selectable(T("has_account").c_str(), false, 0, ImGui::CalcTextSize(T("has_account").c_str()))) {
             isRegisteringMode = false;
             loginErrorMsg = "";
         }
@@ -1538,7 +1710,7 @@ int main(int, char**) {
                     ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Konto Darmowe");
                 }
                 ImGui::Spacing();
-                if (ImGui::Button(isOfflineMode ? "Zaloguj sie" : "Wyloguj sie", ImVec2(ImGui::GetContentRegionAvail().x - 10, 24))) {
+                if (ImGui::Button(isOfflineMode ? T("login_text").c_str() : T("logout").c_str(), ImVec2(ImGui::GetContentRegionAvail().x - 10, 24))) {
                     isLoggedIn = false;
                     isOfflineMode = false;
                     isSubscribed = false;
@@ -1547,7 +1719,7 @@ int main(int, char**) {
                     DeleteLocalSession();
                     snprintf(profileName, sizeof(profileName), "Aleksandra Kowalska");
                     snprintf(profileEmail, sizeof(profileEmail), "aleksandra@framelab.io");
-                    ShowToast("Wylogowano.", "info");
+                    ShowToast(T("toast_logged_out"), "info");
                 }
             }
 
