@@ -141,6 +141,14 @@ std::string fbLocalId = "";
 std::string fbSessionHash = "";
 bool rememberMe = true;
 
+struct AuroraCircle {
+    ImVec2 pos;
+    ImVec2 vel;
+    float radius;
+    ImVec4 color;
+};
+std::vector<AuroraCircle> auroraCircles;
+
 std::vector<AppInfo> apps;
 std::vector<Project> projects;
 std::vector<Asset> assets;
@@ -479,42 +487,108 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
     return true;
 }
 
-// Ekran logowania/rejestracji ImGui
-void RenderLoginScreen(ImVec2 displaySize) {
-    ImGui::SetNextWindowPos(ImVec2(displaySize.x / 2.0f, displaySize.y / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(440, 500));
+// Ekran logowania/rejestracji ImGui z animowaną zorzą w tle (Aurora background) i płynnym resizingiem
+void DrawAuroraBackground(ImVec2 displaySize, float deltaTime) {
+    ImDrawList* drawList = ImGui::GetBackgroundDrawList();
     
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 0.98f));
+    // Rysowanie głębokiego ciemnego tła
+    drawList->AddRectFilled(ImVec2(0, 0), displaySize, IM_COL32(6, 6, 10, 255));
+    
+    // Aktualizacja i rysowanie kul zorzy z rozmyciem kołowym
+    for (auto& circle : auroraCircles) {
+        circle.pos.x += circle.vel.x * deltaTime;
+        circle.pos.y += circle.vel.y * deltaTime;
+        
+        // Odbicia od krawędzi ekranu z uwzględnieniem promienia
+        if (circle.pos.x - circle.radius < 0) { circle.pos.x = circle.radius; circle.vel.x = -circle.vel.x; }
+        if (circle.pos.x + circle.radius > displaySize.x) { circle.pos.x = displaySize.x - circle.radius; circle.vel.x = -circle.vel.x; }
+        if (circle.pos.y - circle.radius < 0) { circle.pos.y = circle.radius; circle.vel.y = -circle.vel.y; }
+        if (circle.pos.y + circle.radius > displaySize.y) { circle.pos.y = displaySize.y - circle.radius; circle.vel.y = -circle.vel.y; }
+        
+        int steps = 12;
+        for (int i = 0; i < steps; ++i) {
+            float r = circle.radius * (1.0f - (float)i / steps);
+            float alpha = circle.color.w * ((float)i / steps);
+            ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(circle.color.x, circle.color.y, circle.color.z, alpha));
+            drawList->AddCircleFilled(circle.pos, r, col, 64);
+        }
+    }
+}
+
+void RenderLoginScreen(ImVec2 displaySize, float deltaTime) {
+    // Rysowanie animowanej zorzy w tle logowania
+    DrawAuroraBackground(displaySize, deltaTime);
+
+    // Obliczanie płynnej wysokości okna (smooth damp) w zależności od wybranego trybu
+    float targetHeight = isRegisteringMode ? 440.0f : 340.0f;
+    static float currentHeight = targetHeight;
+    currentHeight += (targetHeight - currentHeight) * deltaTime * 10.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(displaySize.x / 2.0f, displaySize.y / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(420, currentHeight));
+    
+    // Glassmorphism - obniżona przezroczystość (0.80f) tła okna
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 0.80f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+    
     ImGui::Begin("Logowanie / Rejestracja", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
+    // Rysowanie pulsującej neonowej obwódki (neon border glow)
+    ImDrawList* windowDrawList = ImGui::GetWindowDrawList();
+    ImVec2 minPos = ImGui::GetWindowPos();
+    ImVec2 maxPos = ImVec2(minPos.x + ImGui::GetWindowWidth(), minPos.y + ImGui::GetWindowHeight());
+    
+    static float glowTime = 0.0f;
+    glowTime += deltaTime;
+    float pulse = 0.5f + 0.5f * sin(glowTime * 3.5f);
+    ImVec4 glowColor = ImVec4(0.54f, 0.36f, 0.96f, 0.25f + pulse * 0.25f);
+    windowDrawList->AddRect(minPos, maxPos, ImGui::ColorConvertFloat4ToU32(glowColor), 10.0f, 0, 2.5f);
+
     ImGui::Spacing();
-    ImGui::Spacing();
+    
+    // Animowany nagłówek z przechodzącym kolorem (neon transition title)
+    float windowWidth = ImGui::GetWindowWidth();
+    std::string titleStr = "F R A M E L A B  H U B";
+    ImVec2 titleSize = fontBold ? fontBold->CalcTextSizeA(20.0f, FLT_MAX, 0.0f, titleStr.c_str()) : ImGui::CalcTextSize(titleStr.c_str());
+    ImGui::SetCursorPosX((windowWidth - titleSize.x) / 2.0f);
     
     if (fontBold) ImGui::PushFont(fontBold);
-    ImGui::TextColored(ImVec4(0.85f, 0.35f, 0.9f, 1.0f), "      F R A M E L A B  H U B");
+    float hueBlend = 0.5f + 0.5f * sin(glowTime * 2.0f);
+    ImVec4 titleCol = ImVec4(0.75f + hueBlend * 0.2f, 0.35f, 0.96f - hueBlend * 0.15f, 1.0f);
+    ImGui::TextColored(titleCol, "%s", titleStr.c_str());
     if (fontBold) ImGui::PopFont();
     
-    ImGui::TextDisabled("            Bezpieczne logowanie przez Firebase");
+    std::string subTitleStr = "Uwierzytelnianie konta w chmurze";
+    ImVec2 subSize = ImGui::CalcTextSize(subTitleStr.c_str());
+    ImGui::SetCursorPosX((windowWidth - subSize.x) / 2.0f);
+    ImGui::TextDisabled("%s", subTitleStr.c_str());
+    
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     if (!isRegisteringMode) {
-        ImGui::Text("E-mail");
+        ImGui::TextDisabled("Adres E-mail");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputText("##login_email", loginEmail, IM_ARRAYSIZE(loginEmail));
+        ImGui::InputTextWithHint("##login_email", "np. jan.kowalski@email.com", loginEmail, IM_ARRAYSIZE(loginEmail));
         ImGui::Spacing();
 
-        ImGui::Text("Haslo");
+        ImGui::TextDisabled("Hasło dostępu");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputText("##login_pass", loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
+        ImGui::InputTextWithHint("##login_pass", "Wprowadz haslo", loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
         ImGui::Spacing();
 
-        ImGui::Checkbox("Zapamietaj mnie", &rememberMe);
+        ImGui::Checkbox("Zapamietaj mnie na tym urzadzeniu", &rememberMe);
         ImGui::Spacing();
 
         if (!loginLoading) {
-            if (ImGui::Button("Zaloguj sie", ImVec2(ImGui::GetContentRegionAvail().x, 35))) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.54f, 0.36f, 0.96f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.48f, 0.98f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.28f, 0.88f, 1.0f));
+            
+            if (ImGui::Button("ZALOGUJ SIE", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                 loginLoading = true;
                 loginErrorMsg = "";
                 std::string err;
@@ -526,8 +600,9 @@ void RenderLoginScreen(ImVec2 displaySize) {
                 }
                 loginLoading = false;
             }
+            ImGui::PopStyleColor(3);
         } else {
-            ImGui::Button("Logowanie...", ImVec2(ImGui::GetContentRegionAvail().x, 35));
+            ImGui::Button("Logowanie...", ImVec2(ImGui::GetContentRegionAvail().x, 38));
         }
 
         ImGui::Spacing();
@@ -537,23 +612,27 @@ void RenderLoginScreen(ImVec2 displaySize) {
             loginErrorMsg = "";
         }
     } else {
-        ImGui::Text("Imie / Nazwa profilu");
+        ImGui::TextDisabled("Nazwa użytkownika / Imię");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputText("##reg_name", registerName, IM_ARRAYSIZE(registerName));
+        ImGui::InputTextWithHint("##reg_name", "np. Aleksandra", registerName, IM_ARRAYSIZE(registerName));
         ImGui::Spacing();
 
-        ImGui::Text("E-mail");
+        ImGui::TextDisabled("Adres E-mail");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputText("##reg_email", registerEmail, IM_ARRAYSIZE(registerEmail));
+        ImGui::InputTextWithHint("##reg_email", "twoj@email.com", registerEmail, IM_ARRAYSIZE(registerEmail));
         ImGui::Spacing();
 
-        ImGui::Text("Haslo (min. 6 znakow)");
+        ImGui::TextDisabled("Hasło (min. 6 znaków)");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-        ImGui::InputText("##reg_pass", registerPassword, IM_ARRAYSIZE(registerPassword), ImGuiInputTextFlags_Password);
+        ImGui::InputTextWithHint("##reg_pass", "Wprowadz haslo", registerPassword, IM_ARRAYSIZE(registerPassword), ImGuiInputTextFlags_Password);
         ImGui::Spacing();
 
         if (!loginLoading) {
-            if (ImGui::Button("Zarejestruj sie", ImVec2(ImGui::GetContentRegionAvail().x, 35))) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.54f, 0.36f, 0.96f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.48f, 0.98f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.28f, 0.88f, 1.0f));
+            
+            if (ImGui::Button("ZAREJESTRUJ SIE", ImVec2(ImGui::GetContentRegionAvail().x, 38))) {
                 loginLoading = true;
                 loginErrorMsg = "";
                 std::string err;
@@ -565,8 +644,9 @@ void RenderLoginScreen(ImVec2 displaySize) {
                 }
                 loginLoading = false;
             }
+            ImGui::PopStyleColor(3);
         } else {
-            ImGui::Button("Rejestracja...", ImVec2(ImGui::GetContentRegionAvail().x, 35));
+            ImGui::Button("Rejestracja...", ImVec2(ImGui::GetContentRegionAvail().x, 38));
         }
 
         ImGui::Spacing();
@@ -583,6 +663,7 @@ void RenderLoginScreen(ImVec2 displaySize) {
     }
 
     ImGui::End();
+    ImGui::PopStyleVar(3);
     ImGui::PopStyleColor();
 }
 
@@ -652,6 +733,11 @@ void ApplyTheme(Theme theme) {
 
 // Inicjalizacja danych początkowych
 void InitData() {
+    // Inicjalizacja kul zorzy (Aurora) do tła logowania
+    auroraCircles.push_back({ ImVec2(200, 200), ImVec2(30.0f, 25.0f), 180.0f, ImVec4(0.54f, 0.36f, 0.96f, 0.15f) }); // fioletowa
+    auroraCircles.push_back({ ImVec2(800, 500), ImVec2(-25.0f, 40.0f), 220.0f, ImVec4(0.02f, 0.71f, 0.83f, 0.12f) }); // cyjanowa
+    auroraCircles.push_back({ ImVec2(500, 300), ImVec2(15.0f, -30.0f), 150.0f, ImVec4(0.92f, 0.28f, 0.60f, 0.10f) }); // różowa
+
     // Aplikacje
     apps.push_back({ "motions", "FrameLab Motions", "video", "Wideo i Animacja", "Efekty wizualne i ruch", "Profesjonalne srodowisko do animacji wektorowej i efektów wizualnych.", "v2.4.1", "1.8 GB", STATUS_INSTALLED, ImVec4(0.54f, 0.36f, 0.96f, 1.0f), "Mo" });
     apps.push_back({ "studio", "FrameLab Studio", "video", "Montaz Wideo", "Nieliniowy montaz wideo", "Kompleksowy edytor wideo do montazu wielosciezkowego i gradacji barw.", "v4.2.0", "3.1 GB", STATUS_UPDATE, ImVec4(0.02f, 0.71f, 0.83f, 1.0f), "St" });
@@ -830,7 +916,7 @@ int main(int, char**) {
 
         // Nowy warunek uwierzytelniania
         if (!isLoggedIn && !isOfflineMode) {
-            RenderLoginScreen(io.DisplaySize);
+            RenderLoginScreen(io.DisplaySize, deltaTime);
         } else {
             // Przełączenie widoku - Symulator zajmuje całe okno
             if (currentTab == TAB_SIMULATOR) {
