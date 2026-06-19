@@ -138,6 +138,8 @@ bool isOfflineMode = false;
 bool isSubscribed = false;
 std::string fbIdToken = "";
 std::string fbLocalId = "";
+std::string fbSessionHash = "";
+bool rememberMe = true;
 
 std::vector<AppInfo> apps;
 std::vector<Project> projects;
@@ -192,20 +194,20 @@ void ShowToast(const std::string& message, const std::string& type = "success") 
 }
 
 // Bezpieczne zapytanie HTTPS za pomocą systemowego cURL (bezpośrednie wywołanie)
-std::string PerformHTTPSRequest(const std::string& method, const std::string& url, const std::string& jsonPayload) {
+std::string PerformHTTPSRequest(const std::string& method, const std::string& url, const std::string& payload, const std::string& contentType = "application/json") {
     std::string tempFilename = "temp_fb_req.json";
     {
         std::ofstream tempFile(tempFilename);
         if (tempFile.is_open()) {
-            tempFile << jsonPayload;
+            tempFile << payload;
         }
     }
 
     std::string cmd;
 #ifdef _WIN32
-    cmd = "curl -s -X " + method + " -H \"Content-Type: application/json\" -d @" + tempFilename + " \"" + url + "\"";
+    cmd = "curl -s -X " + method + " -H \"Content-Type: " + contentType + "\" -d @" + tempFilename + " \"" + url + "\"";
 #else
-    cmd = "curl -s -X " + method + " -H 'Content-Type: application/json' -d @" + tempFilename + " '" + url + "'";
+    cmd = "curl -s -X " + method + " -H 'Content-Type: " + contentType + "' -d @" + tempFilename + " '" + url + "'";
 #endif
 
     std::string result;
@@ -258,6 +260,122 @@ std::string GetJSONValue(const std::string& json, const std::string& key) {
     }
 }
 
+// Generowanie losowego hasha sesji (sliding session token)
+std::string GenerateRandomHash() {
+    static const char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::string hash = "";
+    unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::srand(seed);
+    for (int i = 0; i < 32; ++i) {
+        hash += alphabet[std::rand() % (sizeof(alphabet) - 1)];
+    }
+    return hash;
+}
+
+// Zapisanie sesji w bazie Firebase Realtime Database oraz lokalnym pliku session.txt
+void SaveSession(const std::string& uid, const std::string& email, const std::string& refreshToken) {
+    if (refreshToken.empty()) return;
+    
+    std::string sessionHash = GenerateRandomHash();
+    
+    // Zapisz sesję w bazie danych (ścieżka /sessions/[hash])
+    std::string dbUrl = FIREBASE_DATABASE_URL + "sessions/" + sessionHash + ".json";
+    std::string dbPayload = "{\"uid\":\"" + uid + "\",\"email\":\"" + email + "\",\"refreshToken\":\"" + refreshToken + "\"}";
+    PerformHTTPSRequest("PUT", dbUrl, dbPayload);
+    
+    // Zapisz sesję lokalnie w pliku
+    std::ofstream sessionFile("session.txt");
+    if (sessionFile.is_open()) {
+        sessionFile << uid << "\n" << sessionHash << "\n";
+        sessionFile.close();
+    }
+    
+    fbSessionHash = sessionHash;
+}
+
+// Skasowanie lokalnej sesji i usunięcie jej z bazy danych
+void DeleteLocalSession() {
+    if (!fbSessionHash.empty()) {
+        // Usuń sesję z bazy danych
+        std::string dbUrl = FIREBASE_DATABASE_URL + "sessions/" + fbSessionHash + ".json";
+        PerformHTTPSRequest("DELETE", dbUrl, "");
+        fbSessionHash = "";
+    }
+    std::remove("session.txt");
+}
+
+// Odczytanie i weryfikacja zapisanej sesji (rotacja tokenu)
+bool CheckSavedSession() {
+    if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
+        return false;
+    }
+
+    std::ifstream sessionFile("session.txt");
+    if (!sessionFile.is_open()) return false;
+    
+    std::string uid, sessionHash;
+    if (!std::getline(sessionFile, uid) || !std::getline(sessionFile, sessionHash)) {
+        sessionFile.close();
+        std::remove("session.txt");
+        return false;
+    }
+    sessionFile.close();
+    
+    // Pobierz dane sesji z Firebase Realtime Database
+    std::string dbUrl = FIREBASE_DATABASE_URL + "sessions/" + sessionHash + ".json";
+    std::string dbResponse = PerformHTTPSRequest("GET", dbUrl, "");
+    
+    std::string dbUid = GetJSONValue(dbResponse, "uid");
+    std::string dbRefreshToken = GetJSONValue(dbResponse, "refreshToken");
+    std::string dbEmail = GetJSONValue(dbResponse, "email");
+    
+    if (dbUid.empty() || dbRefreshToken.empty() || dbUid != uid) {
+        std::remove("session.txt");
+        return false;
+    }
+    
+    // Natychmiast usuwamy starą sesję z bazy danych (rotacja tokenu!)
+    PerformHTTPSRequest("DELETE", dbUrl, "");
+    
+    // Odświeżamy ID token za pomocą Firebase Auth Refresh Token API
+    std::string refreshUrl = "https://securetoken.googleapis.com/v1/token?key=" + FIREBASE_API_KEY;
+    std::string refreshPayload = "grant_type=refresh_token&refresh_token=" + dbRefreshToken;
+    
+    std::string refreshResponse = PerformHTTPSRequest("POST", refreshUrl, refreshPayload, "application/x-www-form-urlencoded");
+    
+    std::string newIdToken = GetJSONValue(refreshResponse, "id_token");
+    std::string newRefreshToken = GetJSONValue(refreshResponse, "refresh_token");
+    
+    if (newIdToken.empty() || newRefreshToken.empty()) {
+        std::remove("session.txt");
+        return false;
+    }
+    
+    // Zapisz nową sesję z nowym, wyrotowanym hashem
+    SaveSession(uid, dbEmail, newRefreshToken);
+    
+    // Zaloguj użytkownika do aplikacji
+    isLoggedIn = true;
+    fbIdToken = newIdToken;
+    fbLocalId = uid;
+    
+    // Pobierz dane profilu
+    std::string userDbUrl = FIREBASE_DATABASE_URL + "users/" + uid + ".json?auth=" + newIdToken;
+    std::string userDbResponse = PerformHTTPSRequest("GET", userDbUrl, "");
+    
+    std::string dbName = GetJSONValue(userDbResponse, "name");
+    if (!dbName.empty()) {
+        snprintf(profileName, sizeof(profileName), "%s", dbName.c_str());
+    }
+    snprintf(profileEmail, sizeof(profileEmail), "%s", dbEmail.c_str());
+    
+    std::string dbSub = GetJSONValue(userDbResponse, "subscribed");
+    isSubscribed = (dbSub == "true");
+    
+    ShowToast("Witaj z powrotem!", "success");
+    return true;
+}
+
 // Uwierzytelnianie Firebase: Rejestracja
 bool FirebaseSignUp(const std::string& email, const std::string& password, const std::string& name, std::string& errorMsg) {
     if (FIREBASE_API_KEY == "AIzaSyDummyKeyReplaceThisWithYourOwn") {
@@ -279,6 +397,7 @@ bool FirebaseSignUp(const std::string& email, const std::string& password, const
 
     std::string localId = GetJSONValue(response, "localId");
     std::string idToken = GetJSONValue(response, "idToken");
+    std::string refreshToken = GetJSONValue(response, "refreshToken");
     if (localId.empty() || idToken.empty()) {
         errorMsg = "Nieznany blad serwera Firebase.";
         return false;
@@ -295,6 +414,12 @@ bool FirebaseSignUp(const std::string& email, const std::string& password, const
     isSubscribed = false;
     snprintf(profileName, sizeof(profileName), "%s", name.c_str());
     snprintf(profileEmail, sizeof(profileEmail), "%s", email.c_str());
+
+    if (rememberMe) {
+        SaveSession(localId, email, refreshToken);
+    } else {
+        DeleteLocalSession();
+    }
 
     return true;
 }
@@ -323,6 +448,7 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
 
     std::string localId = GetJSONValue(response, "localId");
     std::string idToken = GetJSONValue(response, "idToken");
+    std::string refreshToken = GetJSONValue(response, "refreshToken");
     if (localId.empty() || idToken.empty()) {
         errorMsg = "Nieznany blad serwera Firebase.";
         return false;
@@ -343,6 +469,12 @@ bool FirebaseSignIn(const std::string& email, const std::string& password, std::
 
     std::string dbSub = GetJSONValue(dbResponse, "subscribed");
     isSubscribed = (dbSub == "true");
+
+    if (rememberMe) {
+        SaveSession(localId, email, refreshToken);
+    } else {
+        DeleteLocalSession();
+    }
 
     return true;
 }
@@ -376,6 +508,9 @@ void RenderLoginScreen(ImVec2 displaySize) {
         ImGui::Text("Haslo");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
         ImGui::InputText("##login_pass", loginPassword, IM_ARRAYSIZE(loginPassword), ImGuiInputTextFlags_Password);
+        ImGui::Spacing();
+
+        ImGui::Checkbox("Zapamietaj mnie", &rememberMe);
         ImGui::Spacing();
 
         if (!loginLoading) {
@@ -650,6 +785,7 @@ int main(int, char**) {
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     InitData();
+    CheckSavedSession();
 
     // Główna pętla programu
     auto lastTime = std::chrono::high_resolution_clock::now();
@@ -1252,6 +1388,7 @@ int main(int, char**) {
                     isSubscribed = false;
                     fbIdToken = "";
                     fbLocalId = "";
+                    DeleteLocalSession();
                     snprintf(profileName, sizeof(profileName), "Aleksandra Kowalska");
                     snprintf(profileEmail, sizeof(profileEmail), "aleksandra@framelab.io");
                     ShowToast("Wylogowano.", "info");
